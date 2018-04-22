@@ -8,46 +8,35 @@ import java.util.Random;
 import ab1.RSA;
 
 public class RSAImpl implements RSA {
-	public static void main(String[] args) {
-		RSAImpl abc = new RSAImpl();
-		abc.init(6);
-		byte[] b=new byte[1024];
-		Random random=new Random();
-			random.nextBytes(b);
-		abc.encrypt(b, false);
-	}
-
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
 	private int bitlength;
 
 	@Override
 	public void init(int n) {
-		bitlength=n;
+		bitlength = n;
 		BigInteger p = null, q = null;
+		BigInteger nn;
 		SecureRandom rand = new SecureRandom();
 		do {
-			p = BigInteger.probablePrime(n/2, rand);
-		} while (p.equals(BigInteger.ONE) || p.equals(new BigInteger("2")));
-		do {
-			rand.setSeed((long) Math.random() * 100);
-			q = BigInteger.probablePrime(n/2, rand);
-		} while (q.equals(p) || q.equals(BigInteger.ONE) || q.equals(new BigInteger("2")));
-		System.out.println("" + q + "\n" + p);
-		// n = p*q
-		BigInteger nn = p.multiply(q);
+			do {
+				p = BigInteger.probablePrime(n / 2, rand);
+			} while (p.equals(BigInteger.ONE) || p.equals(new BigInteger("2")));
+			do {
+				q = BigInteger.probablePrime(n / 2, rand);
+			} while (q.equals(p) || q.equals(BigInteger.ONE) || q.equals(new BigInteger("2")));
+			// n = p*q
+			nn = p.multiply(q);
+		} while (nn.bitLength() != n);
 		// phi(n)=(p-1)(q-1)
 		BigInteger phi = q.subtract(BigInteger.ONE).multiply(p.subtract(BigInteger.ONE));
-		System.out.println("" + phi);
 		// e= 2^16+1
 		BigInteger e = new BigInteger("65537");
 		// e=e.pow(16).add(BigInteger.ONE);
 		while (!e.gcd(phi).equals(BigInteger.ONE) || e.equals(BigInteger.ONE) || e.equals(BigInteger.ZERO)) {
 			e = e.add(new BigInteger("2"));
 		}
-		System.out.println("" + e);
 		BigInteger d = e.modInverse(phi);
-		System.out.println(d);
 		publicKey = new PublicKey(nn, e);
 		privateKey = new PrivateKey(nn, d);
 
@@ -65,25 +54,18 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] encrypt(byte[] data, boolean activateOAEP) {
-		byte[] result=new byte[data.length];
-		if(!activateOAEP){
-			for (int i = 0; i < data.length/bitlength; i++) {
-				byte[] block=Arrays.copyOfRange(data, i*bitlength, i*bitlength+bitlength-1);
-				System.out.println(Arrays.toString(block));
-				System.out.println(new BigInteger(Arrays.toString(block)));
-				block=(new BigInteger(Arrays.toString(block))).pow(publicKey.getE().intValue()).mod(publicKey.getN()).toByteArray();
-				
-
-			}
-			
-		}
-		return null;
+		byte[] result=toByteArray((toBigInt(data).modPow(publicKey.getE(), publicKey.getN())));
+		System.out.println(Arrays.toString(data));
+		System.out.println(Arrays.toString(result));
+		return result;
 	}
 
 	@Override
 	public byte[] decrypt(byte[] data) {
-		// TODO Auto-generated method stub
-		return null;
+		byte[] result=toByteArray((toBigInt(data).modPow(privateKey.getD(), privateKey.getN())));
+		System.out.println(Arrays.toString(data));
+		System.out.println(Arrays.toString(result));		
+		return result;
 	}
 
 	@Override
@@ -97,5 +79,19 @@ public class RSAImpl implements RSA {
 		// TODO Auto-generated method stub
 		return null;
 	}
+	
+	private static BigInteger toBigInt(byte[] arr) {
+		return new BigInteger(1,arr);
+	}
+	private static byte[] toByteArray(BigInteger bi) {
+		byte[] array = bi.toByteArray();
+		if (array[0] == 0) {
+		    byte[] tmp = new byte[array.length - 1];
+		    System.arraycopy(array, 1, tmp, 0, tmp.length);
+		    array = tmp;
+		}
+		return array;
+	}
+
 
 }
