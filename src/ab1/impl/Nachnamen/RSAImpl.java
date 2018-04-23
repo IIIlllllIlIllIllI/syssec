@@ -1,6 +1,8 @@
 package ab1.impl.Nachnamen;
 
 import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Random;
@@ -11,6 +13,7 @@ public class RSAImpl implements RSA {
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
 	private int bitlength;
+	private static final String HASH_FUNCTION="SHA-256";
 
 	@Override
 	public void init(int n) {
@@ -70,14 +73,27 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] sign(byte[] message) {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
+			message=digest.digest(message);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		byte[] result=toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));
+		return result;
 	}
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		// TODO Auto-generated method stub
-		return null;
+		byte[] result=toByteArray((toBigInt(signature).modPow(publicKey.getE(), publicKey.getN())));
+		try {
+			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
+			message=digest.digest(message);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		System.out.println(Arrays.equals(message,result));
+		return Arrays.equals(message,result);
 	}
 	
 	private static BigInteger toBigInt(byte[] arr) {
