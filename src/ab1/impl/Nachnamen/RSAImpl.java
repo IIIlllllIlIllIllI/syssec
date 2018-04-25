@@ -57,7 +57,13 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] encrypt(byte[] data, boolean activateOAEP) {
-		byte[] result=toByteArray((toBigInt(data).modPow(publicKey.getE(), publicKey.getN())));
+		byte[] result=new byte[data.length*32];
+		for (int i = 0; i < data.length; i+=127) {
+			byte[] tmp = new byte[127];
+		    System.arraycopy(data, i, tmp, 0, tmp.length<=data.length? tmp.length:data.length);
+		    tmp=toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
+		    System.arraycopy(tmp, i, result, 0, tmp.length);
+		}
 		System.out.println(Arrays.toString(data));
 		System.out.println(Arrays.toString(result));
 		return result;
@@ -79,13 +85,13 @@ public class RSAImpl implements RSA {
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		}
-		byte[] result=toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));
+		byte[] result=decrypt(message);
 		return result;
 	}
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		byte[] result=toByteArray((toBigInt(signature).modPow(publicKey.getE(), publicKey.getN())));
+		byte[] result=encrypt(message, false);
 		try {
 			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
 			message=digest.digest(message);
