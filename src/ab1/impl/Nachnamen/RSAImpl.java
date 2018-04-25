@@ -57,12 +57,12 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] encrypt(byte[] data, boolean activateOAEP) {
-		byte[] result=new byte[data.length*32];
+		byte[] result=new byte[128*(data.length/128+1)];
 		for (int i = 0; i < data.length; i+=127) {
 			byte[] tmp = new byte[127];
-		    System.arraycopy(data, i, tmp, 0, tmp.length<=data.length? tmp.length:data.length);
+		    System.arraycopy(data, i, tmp, 0, tmp.length<=data.length-i? tmp.length:data.length-i);
 		    tmp=toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
-		    System.arraycopy(tmp, i, result, 0, tmp.length);
+		    System.arraycopy(tmp, 0, result, i, tmp.length);
 		}
 		System.out.println(Arrays.toString(data));
 		System.out.println(Arrays.toString(result));
