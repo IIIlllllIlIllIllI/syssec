@@ -12,12 +12,10 @@ import ab1.RSA;
 public class RSAImpl implements RSA {
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
-	private int bitlength;
 	private static final String HASH_FUNCTION = "SHA-256";
 
 	@Override
 	public void init(int n) {
-		bitlength = n;
 		BigInteger p = null, q = null;
 		BigInteger nn;
 		SecureRandom rand = new SecureRandom();
@@ -54,7 +52,7 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] encrypt(byte[] data, boolean activateOAEP) {
-		
+
 		ArrayList<Byte> al = new ArrayList<>();
 		byte[] result;
 		for (int i = 0; i < data.length; i += 127) {
@@ -66,30 +64,32 @@ public class RSAImpl implements RSA {
 
 			System.arraycopy(data, i, tmp, tmp.length - lenLastBlock, lenLastBlock);
 			tmp[0] = (byte) (tmp.length - lenLastBlock);
-			if (activateOAEP){
-				SecureRandom secureRandom=new SecureRandom();
-				byte[] b=new byte[tmp.length - lenLastBlock-1];
+			if (activateOAEP) {
+				SecureRandom secureRandom = new SecureRandom();
+				byte[] b = new byte[tmp.length - lenLastBlock - 1];
 				secureRandom.nextBytes(b);
-				for (int a =1; a< tmp.length - lenLastBlock; a++){
-					tmp[a]= b[a-1];
+				for (int a = 1; a < tmp.length - lenLastBlock; a++) {
+					tmp[a] = b[a - 1];
 				}
 			}
-			
+
 			tmp = toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
 
-		if(tmp.length%128!=0){
-			al.add((byte) 0);
-		}
+			if (tmp.length % 128 != 0) {
+				for (int j = 0; j < 128 - tmp.length % 128; j++) {
+					al.add((byte) 0);
+				}
+			}
 			for (int j = 0; j < tmp.length; j++) {
 				al.add(tmp[j]);
 			}
 		}
 		result = new byte[al.size()];
-		
+
 		for (int i = 0; i < al.size(); i++) {
 			result[i] = al.get(i);
 		}
-		
+
 		return result;
 	}
 
@@ -99,22 +99,18 @@ public class RSAImpl implements RSA {
 			System.err.println("input too short");
 			return data;
 		}
-		
+
 		ArrayList<Byte> al = new ArrayList<>();
 		byte[] result;
 		for (int i = 0; i < data.length; i += 128) {
 			byte[] tmp = new byte[128];
 
 			System.arraycopy(data, i, tmp, 0, tmp.length);
-	
+
 			tmp = toByteArray((toBigInt(tmp).modPow(privateKey.getD(), privateKey.getN())));
 
 			int paddingLength = Math.abs(tmp[0]);
-			if (paddingLength < 1) {
-				System.err.println("input too short");
-				return data;
-			}
-			 
+
 			for (int j = paddingLength; j < tmp.length; j++) {
 
 				al.add(tmp[j]);
@@ -129,16 +125,17 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] sign(byte[] message) {
-		message=hash(message);
-		byte[] signature = toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));;
+		message = hash(message);
+		byte[] signature = toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));
+		;
 		return signature;
 	}
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		byte[] result =toByteArray((toBigInt(signature).modPow(publicKey.getE(), publicKey.getN())));
-		message=hash(message);
-		message=toByteArray(toBigInt(message));
+		byte[] result = toByteArray((toBigInt(signature).modPow(publicKey.getE(), publicKey.getN())));
+		message = hash(message);
+		message = toByteArray(toBigInt(message));
 		return Arrays.equals(message, result);
 	}
 
@@ -154,17 +151,18 @@ public class RSAImpl implements RSA {
 			array = tmp;
 		}
 		return array;
-	} 
+	}
+
 	private byte[] hash(byte[] data) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
-			
+
 			return digest.digest(data);
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		}
 		return null;
-		
+
 	}
 
 }
