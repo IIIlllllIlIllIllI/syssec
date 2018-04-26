@@ -13,7 +13,7 @@ public class RSAImpl implements RSA {
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
 	private int bitlength;
-	private static final String HASH_FUNCTION="SHA-256";
+	private static final String HASH_FUNCTION = "SHA-256";
 
 	@Override
 	public void init(int n) {
@@ -54,115 +54,117 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] encrypt(byte[] data, boolean activateOAEP) {
-		ArrayList<Byte> al=new ArrayList<>();
+		
+		ArrayList<Byte> al = new ArrayList<>();
 		byte[] result;
-		for (int i = 0; i < data.length; i+=127) {
+		for (int i = 0; i < data.length; i += 127) {
 			byte[] tmp = new byte[128];
-			int lenLastBlock=data.length-i;
-			if(!(127>lenLastBlock)){
-				lenLastBlock=127;
+			int lenLastBlock = data.length - i;
+			if (127 < lenLastBlock) {
+				lenLastBlock = 127;
 			}
-		    System.arraycopy(data, i, tmp, tmp.length-lenLastBlock, lenLastBlock);
-		    tmp[0]=(byte) (tmp.length-lenLastBlock+1);
-		    
-//		    if(tmp.length<127){
-//		    	byte[] padding=new byte[127];
-//		    	
-//		    	System.arraycopy(tmp, 0, padding, 0, tmp.length);
-//		    	padding[tmp.length]=1;
-//		    	if(tmp.length==127){
-//		    		tmp=new byte[padding.length*2];
-//		    	}else{
-//		    		tmp=new byte[padding.length];
-//		    	}
-//		    	System.arraycopy(padding, 0, tmp, 0, padding.length);
-//		    }
-		    tmp=toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
-		    for (int j = 0; j < tmp.length; j++) {
+
+			System.arraycopy(data, i, tmp, tmp.length - lenLastBlock, lenLastBlock);
+			tmp[0] = (byte) (tmp.length - lenLastBlock);
+			if (activateOAEP){
+				SecureRandom secureRandom=new SecureRandom();
+				byte[] b=new byte[tmp.length - lenLastBlock-1];
+				secureRandom.nextBytes(b);
+				for (int a =1; a< tmp.length - lenLastBlock; a++){
+					tmp[a]= b[a-1];
+				}
+			}
+			
+			tmp = toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
+
+		if(tmp.length%128!=0){
+			al.add((byte) 0);
+		}
+			for (int j = 0; j < tmp.length; j++) {
 				al.add(tmp[j]);
 			}
 		}
-		result=new byte[al.size()];
+		result = new byte[al.size()];
+		
 		for (int i = 0; i < al.size(); i++) {
-			result[i]=al.get(i);
+			result[i] = al.get(i);
 		}
-		System.out.println(Arrays.toString(data));
-		System.out.println(Arrays.toString(result));
+		
 		return result;
 	}
 
 	@Override
 	public byte[] decrypt(byte[] data) {
-		ArrayList<Byte> al=new ArrayList<>();
+		if (data.length % 128 != 0) {
+			System.err.println("input too short");
+			return data;
+		}
+		
+		ArrayList<Byte> al = new ArrayList<>();
 		byte[] result;
-		for (int i = 0; i < data.length; i+=128) {
+		for (int i = 0; i < data.length; i += 128) {
 			byte[] tmp = new byte[128];
-		    System.arraycopy(data, i, tmp, 0, tmp.length);
-//		    if(tmp[tmp.length-1]==0){
-//		    	int idx=tmp.length-1;
-//		    	while(tmp[idx]==0){
-//		    		idx--;
-//		    		if(idx<0)
-//		    			break;
-//		    	}
-//		    	if(idx>=0&&tmp[idx]==1){
-//		    		byte[] nopadding=new byte[idx];
-//		    		System.arraycopy(tmp, 0, nopadding, 0, nopadding.length);
-//		    		tmp=nopadding;
-//		    	}
-//		    }
-		    tmp=toByteArray((toBigInt(tmp).modPow(privateKey.getD(), privateKey.getN())));
-		    
-		    for (int j = 0; j < tmp.length; j++) {
+
+			System.arraycopy(data, i, tmp, 0, tmp.length);
+	
+			tmp = toByteArray((toBigInt(tmp).modPow(privateKey.getD(), privateKey.getN())));
+
+			int paddingLength = Math.abs(tmp[0]);
+			if (paddingLength < 1) {
+				System.err.println("input too short");
+				return data;
+			}
+			 
+			for (int j = paddingLength; j < tmp.length; j++) {
+
 				al.add(tmp[j]);
 			}
 		}
-		result=new byte[al.size()];
+		result = new byte[al.size()];
 		for (int i = 0; i < al.size(); i++) {
-			result[i]=al.get(i);
+			result[i] = al.get(i);
 		}
-		System.out.println(Arrays.toString(data));
-		System.out.println(Arrays.toString(result));
 		return result;
 	}
 
 	@Override
 	public byte[] sign(byte[] message) {
-		try {
-			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
-			message=digest.digest(message);
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-		}
-		byte[] result=decrypt(message);
-		return result;
+		message=hash(message);
+		byte[] signature = toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));;
+		return signature;
 	}
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		byte[] result=encrypt(message, false);
-		try {
-			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
-			message=digest.digest(message);
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-		}
-		System.out.println(Arrays.equals(message,result));
-		return Arrays.equals(message,result);
+		byte[] result =toByteArray((toBigInt(signature).modPow(publicKey.getE(), publicKey.getN())));
+		message=hash(message);
+		message=toByteArray(toBigInt(message));
+		return Arrays.equals(message, result);
 	}
-	
+
 	private static BigInteger toBigInt(byte[] arr) {
-		return new BigInteger(1,arr);
+		return new BigInteger(1, arr);
 	}
+
 	private static byte[] toByteArray(BigInteger bi) {
 		byte[] array = bi.toByteArray();
 		if (array[0] == 0) {
-		    byte[] tmp = new byte[array.length - 1];
-		    System.arraycopy(array, 1, tmp, 0, tmp.length);
-		    array = tmp;
+			byte[] tmp = new byte[array.length - 1];
+			System.arraycopy(array, 1, tmp, 0, tmp.length);
+			array = tmp;
 		}
 		return array;
+	} 
+	private byte[] hash(byte[] data) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
+			
+			return digest.digest(data);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		return null;
+		
 	}
-
 
 }
