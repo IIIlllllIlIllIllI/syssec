@@ -12,6 +12,7 @@ import ab1.RSA;
 public class RSAImpl implements RSA {
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
+	//algorithm used as hash-function
 	private static final String HASH_FUNCTION = "SHA-256";
 
 	@Override
@@ -70,12 +71,13 @@ public class RSAImpl implements RSA {
 			byte[] tmp = new byte[128];
 			int lenLastBlock = data.length - i;
 
-
+			//check if the last block is shorter than 127 bytes
 			if (127 < lenLastBlock) {
 				lenLastBlock = 127;
 			}
 
 			System.arraycopy(data, i, tmp, tmp.length - lenLastBlock, lenLastBlock);
+			//write padding information into first byte
 			tmp[0] = (byte) (tmp.length - lenLastBlock);
 
 			// using Optimal asymmetric encryption padding if activated
@@ -91,18 +93,19 @@ public class RSAImpl implements RSA {
 			// encrypt the current block with c = m^e MOD n
 			tmp = toByteArray((toBigInt(tmp).modPow(publicKey.getE(), publicKey.getN())));
 
-			// if the encrypted block is too short, add a padding
+			// if the encrypted block is too short, add a padding to fill up to 128 bytes
 			if (tmp.length % 128 != 0) {
 				for (int j = 0; j < 128 - tmp.length % 128; j++) {
 					al.add((byte) 0);
 				}
 			}
+			//copy
 			for (int j = 0; j < tmp.length; j++) {
 				al.add(tmp[j]);
 			}
 		}
+		//copy to byte array
 		result = new byte[al.size()];
-
 		for (int i = 0; i < al.size(); i++) {
 			result[i] = al.get(i);
 		}
@@ -112,6 +115,7 @@ public class RSAImpl implements RSA {
 
 	@Override
 	public byte[] decrypt(byte[] data) {
+		//only accept full blocks as received from encrypt-method
 		if (data.length % 128 != 0) {
 			System.err.println("input too short");
 			return data;
@@ -129,13 +133,16 @@ public class RSAImpl implements RSA {
 			// decrypt the block with m = c^d MOD n
 			tmp = toByteArray((toBigInt(tmp).modPow(privateKey.getD(), privateKey.getN())));
 
+			//get padding information
 			int paddingLength = Math.abs(tmp[0]);
 
+			//ignore padded bytes
 			for (int j = paddingLength; j < tmp.length; j++) {
 
 				al.add(tmp[j]);
 			}
 		}
+		//copy to byte array
 		result = new byte[al.size()];
 		for (int i = 0; i < al.size(); i++) {
 			result[i] = al.get(i);
@@ -151,7 +158,6 @@ public class RSAImpl implements RSA {
 
 		// sign the hashed message with m^d MOD n
 		byte[] signature = toByteArray((toBigInt(message).modPow(privateKey.getD(), privateKey.getN())));
-		;
 		return signature;
 	}
 
@@ -186,7 +192,6 @@ public class RSAImpl implements RSA {
 	private byte[] hash(byte[] data) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
-
 			return digest.digest(data);
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
