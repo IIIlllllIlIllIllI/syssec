@@ -11,7 +11,7 @@ import org.junit.Test;
 import ab1.RSA;
 import ab1.RSA.PrivateKey;
 import ab1.RSA.PublicKey;
-import ab1.impl.Nachnamen.RSAImpl;
+import ab1.impl.Platter_Kofler_Lepuschitz.RSAImpl;
 
 public class RSATest {
 	RSA rsa = new RSAImpl();
