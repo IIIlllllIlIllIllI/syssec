@@ -16,7 +16,7 @@ public class ElGamalImpl implements ElGamal {
 	@Override
 	public void init(int n) {
 		SecureRandom rand = new SecureRandom();
-		BigInteger p, a, g, pPrime;
+		BigInteger p, d, g, pPrime;
 		do {
 			p = BigInteger.probablePrime(n - 1, rand);
 			p = TWO.multiply(p).add(ONE);
@@ -32,11 +32,11 @@ public class ElGamalImpl implements ElGamal {
 				g = (new BigInteger(p.bitLength() + 100, rand)).mod(p);
 		}
 		do {
-			a = (new BigInteger(pPrime.subtract(ONE).bitLength() + 100, rand)).mod(pPrime.subtract(ONE));
-		} while (a.equals(ZERO));
-		BigInteger h = g.modPow(a, p);
-		privateKey = new PrivateKey(p, g, a);
-		publicKey = new PublicKey(p, g, h);
+			d = (new BigInteger(pPrime.subtract(ONE).bitLength() + 100, rand)).mod(pPrime.subtract(ONE));
+		} while (d.equals(ZERO));
+		BigInteger e = g.modPow(d, p);
+		privateKey = new PrivateKey(p, g, d);
+		publicKey = new PublicKey(p, g, e);
 
 	}
 
@@ -52,71 +52,114 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] encrypt(byte[] data) {
-		int keylength=privateKey.getP().bitLength();
-		int blocklength=keylength/8-1;
+		int keylength = publicKey.getP().bitLength();
+		int blocklength = keylength / 8 - 1;
+		int optimalCipherBlockLength = keylength / 8 * 2;
 		SecureRandom rand = new SecureRandom();
-		BigInteger pPrime = privateKey.getP().subtract(BigInteger.ONE).divide(TWO);
-		BigInteger r,c1,s;
+		BigInteger r, s, c1, pPrime;
+		pPrime = publicKey.getP().subtract(BigInteger.ONE).divide(TWO);
+
 		do {
 			r = (new BigInteger(pPrime.bitLength() + 100, rand)).mod(pPrime);
-		} while (r.equals(ZERO));
-		
-		
-		c1=pow(privateKey.getG(),r);
-		s=pow(publicKey.getE(),r);
-		
-		
-		ArrayList<Byte> al = new ArrayList<>();
-		byte[] rarr=toByteArray(r);
-		al.add((byte) rarr.length);
-		for (int i = 0; i < rarr.length; i++) {
-			al.add(rarr[i]);
-		}
-		byte[] result;
+			System.out.println("*");
+		} while (r.equals(ZERO) || r.gcd(publicKey.getP()) != ONE);
 
-        // dividing the data into 'blocklength' byte blocks and encrypt them
+		c1 = publicKey.getG().modPow(r, publicKey.getP());
+		s = publicKey.getE().modPow(r, publicKey.getP());
+
+		ArrayList<Byte> arrayList = new ArrayList<>();
+		byte[] c1Bytes = toByteArray(c1);
+		arrayList.add((byte) c1Bytes.length);
+		for (int i = 0; i < c1Bytes.length; i++) {
+			arrayList.add(c1Bytes[i]);
+		}
+
+		// dividing the data into 'blocklength' byte blocks and encrypt them
 		for (int i = 0; i < data.length; i += blocklength) {
-			byte[] tmp = new byte[blocklength+1];
+			byte[] m_i = new byte[blocklength + 1];
 			int lenLastBlock = data.length - i;
 
-			//check if the last block is shorter than 127 bytes
+			// check if the last block is shorter than 127 bytes
 			if (blocklength < lenLastBlock) {
 				lenLastBlock = blocklength;
 			}
 
-			System.arraycopy(data, i, tmp, tmp.length - lenLastBlock, lenLastBlock);
-			//write padding information into first byte
-			tmp[0] = (byte) (tmp.length - lenLastBlock);
+			System.arraycopy(data, i, m_i, m_i.length - lenLastBlock, lenLastBlock);
+			// write padding information into first byte
+			m_i[0] = (byte) (m_i.length - lenLastBlock);
 
-
-			// encrypt the current block with c = m^e MOD n
-			tmp = toByteArray((toBigInt(tmp).multiply(s)));
-
-			// if the encrypted block is too short, add a padding to fill up to 128 bytes
-			if (tmp.length % (blocklength+1) != 0) {
-				for (int j = 0; j < blocklength+1 - tmp.length % (blocklength+1); j++) {
-					al.add((byte) 0);
-				}
+			byte[] tmp = new byte[optimalCipherBlockLength];
+			System.arraycopy(m_i, 0, tmp, 0, m_i.length);
+			// if the block is too short, add a padding to fill up to
+			// 'optimalCipherBlockLength'
+			for (int j = m_i.length; j < optimalCipherBlockLength; j++) {
+				m_i[j] = 0;
 			}
-			//copy
-			for (int j = 0; j < tmp.length; j++) {
-				al.add(tmp[j]);
-			}
-		}
-		//copy to byte array
-		result = new byte[al.size()];
-		for (int i = 0; i < al.size(); i++) {
-			result[i] = al.get(i);
-		}
 
+			// encrypt the current block
+			// c2
+			m_i = toByteArray((toBigInt(m_i).multiply(s)));
+
+			// copy
+			for (int j = 0; j < m_i.length; j++) {
+				arrayList.add(m_i[j]);
+			}
+
+		}
+		// copy to byte array
+		byte[] result = new byte[arrayList.size()];
+		for (int i = 0; i < arrayList.size(); i++) {
+			result[i] = arrayList.get(i);
+		}
 		return result;
 
 	}
 
 	@Override
 	public byte[] decrypt(byte[] data) {
-		// TODO Auto-generated method stub
-		return null;
+		int keylength = privateKey.getP().bitLength();
+		int optimalCipherBlockLength = keylength / 8 * 2;
+		byte c1len = data[0];
+		byte[] c1arr = new byte[c1len];
+		for (int i = 1; i <= c1len; i++) {
+			c1arr[i] = data[i];
+		}
+		BigInteger c1 = toBigInt(c1arr);
+		BigInteger s = c1.modPow(privateKey.getD(), privateKey.getP());
+		// only accept full blocks as received from encrypt-method
+		if (data.length - c1len - 1 % optimalCipherBlockLength != 0) {
+			System.err.println("input too short");
+			return data;
+		}
+
+		ArrayList<Byte> al = new ArrayList<>();
+
+		// divide the cyphertext into blocks and decrypt them
+		for (int i = 0; i < data.length; i += optimalCipherBlockLength) {
+			byte[] c2_i = new byte[optimalCipherBlockLength];
+
+			System.arraycopy(data, i, c2_i, 0, c2_i.length);
+
+			// decrypt the block
+			//m_i
+			c2_i = toByteArray((toBigInt(c2_i).multiply(s.modInverse(privateKey.getP()).mod(privateKey.getP()))));
+
+			// get padding information
+			int paddingLength = Math.abs(c2_i[0]);
+
+			// ignore padded bytes
+			for (int j = paddingLength; j < c2_i.length; j++) {
+
+				al.add(c2_i[j]);
+			}
+		}
+		// copy to byte array
+		byte[] result = new byte[al.size()];
+		for (int i = 0; i < al.size(); i++) {
+			result[i] = al.get(i);
+		}
+		return result;
+
 	}
 
 	@Override
@@ -130,7 +173,7 @@ public class ElGamalImpl implements ElGamal {
 		// TODO Auto-generated method stub
 		return null;
 	}
-	
+
 	private static BigInteger toBigInt(byte[] arr) {
 		return new BigInteger(1, arr);
 	}
@@ -144,15 +187,16 @@ public class ElGamalImpl implements ElGamal {
 		}
 		return array;
 	}
-	
+
 	BigInteger pow(BigInteger base, BigInteger exponent) {
-		  BigInteger result = BigInteger.ONE;
-		  while (exponent.signum() > 0) {
-		    if (exponent.testBit(0)) result = result.multiply(base);
-		    base = base.multiply(base);
-		    exponent = exponent.shiftRight(1);
-		  }
-		  return result;
+		BigInteger result = BigInteger.ONE;
+		while (exponent.signum() > 0) {
+			if (exponent.testBit(0))
+				result = result.multiply(base);
+			base = base.multiply(base);
+			exponent = exponent.shiftRight(1);
 		}
+		return result;
+	}
 
 }
