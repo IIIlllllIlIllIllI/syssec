@@ -20,7 +20,10 @@ public class ElGamalImpl implements ElGamal {
 		do {
 			p = BigInteger.probablePrime(n - 1, rand);
 			p = TWO.multiply(p).add(ONE);
+			
+			System.out.println("p");
 		} while (!p.isProbablePrime(40) || p.bitLength() != n);
+
 		g = (new BigInteger(p.bitLength() + 100, rand)).mod(p);
 
 		pPrime = p.subtract(ONE).divide(TWO);
@@ -30,9 +33,11 @@ public class ElGamalImpl implements ElGamal {
 				g = g.modPow(TWO, p);
 			else
 				g = (new BigInteger(p.bitLength() + 100, rand)).mod(p);
+			System.out.println("g");
 		}
 		do {
 			d = (new BigInteger(pPrime.subtract(ONE).bitLength() + 100, rand)).mod(pPrime.subtract(ONE));
+			System.out.println("d");
 		} while (d.equals(ZERO));
 		BigInteger e = g.modPow(d, p);
 		privateKey = new PrivateKey(p, g, d);
@@ -56,19 +61,33 @@ public class ElGamalImpl implements ElGamal {
 		int blocklength = keylength / 8 - 1;
 		int optimalCipherBlockLength = keylength / 8 * 2;
 		SecureRandom rand = new SecureRandom();
+		rand.setSeed(Math.round(Math.random()*1000));
 		BigInteger r, s, c1, pPrime;
 		pPrime = publicKey.getP().subtract(BigInteger.ONE).divide(TWO);
-
-		do {
-			r = (new BigInteger(pPrime.bitLength() + 100, rand)).mod(pPrime);
-			System.out.println("*");
-		} while (r.equals(ZERO) || r.gcd(publicKey.getP()) != ONE);
+		ArrayList<Thread> threads=new ArrayList<>();
+		for (int i = 0; i < 4; i++) {
+			threads.add(new Thread(new Rthread(publicKey.getP(), pPrime, rand)));
+			threads.get(i).start();
+		}
+		for (Thread thread : threads) {
+			try {
+				thread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+//		do {
+//			r = (new BigInteger(pPrime.bitLength() + 100, rand)).mod(pPrime);
+//			System.out.println(r);
+//		} while (r.equals(ZERO) || r.gcd(publicKey.getP()) != ONE);
+		r=Rthread.f;
 
 		c1 = publicKey.getG().modPow(r, publicKey.getP());
 		s = publicKey.getE().modPow(r, publicKey.getP());
 
 		ArrayList<Byte> arrayList = new ArrayList<>();
 		byte[] c1Bytes = toByteArray(c1);
+		arrayList.add((byte)(c1Bytes.length/127+1));
 		arrayList.add((byte) c1Bytes.length);
 		for (int i = 0; i < c1Bytes.length; i++) {
 			arrayList.add(c1Bytes[i]);
@@ -93,12 +112,12 @@ public class ElGamalImpl implements ElGamal {
 			// if the block is too short, add a padding to fill up to
 			// 'optimalCipherBlockLength'
 			for (int j = m_i.length; j < optimalCipherBlockLength; j++) {
-				m_i[j] = 0;
+				tmp[j] = 0;
 			}
 
 			// encrypt the current block
 			// c2
-			m_i = toByteArray((toBigInt(m_i).multiply(s)));
+			m_i = toByteArray((toBigInt(tmp).multiply(s)));
 
 			// copy
 			for (int j = 0; j < m_i.length; j++) {
