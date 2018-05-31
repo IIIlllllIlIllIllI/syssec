@@ -1,44 +1,75 @@
 package ab2.impl.Platter_Kofler_Lepuschitz;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
+
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 import ab2.ElGamal;
 
 public class ElGamalImpl implements ElGamal {
 	private PublicKey publicKey;
 	private PrivateKey privateKey;
-	static final BigInteger ONE = BigInteger.ONE;
-	static final BigInteger TWO = ONE.add(ONE);
-	static final BigInteger ZERO = BigInteger.ZERO;
-
+	public static final BigInteger ONE = BigInteger.ONE;
+	public static final BigInteger TWO = ONE.add(ONE);
+	public static final BigInteger ZERO = BigInteger.ZERO;
+	public static final int THREADS=8;
+	private SecureRandom rand;
+	private ExecutorService executorService;
+	
 	@Override
 	public void init(int n) {
-		SecureRandom rand = new SecureRandom();
-		BigInteger p, d, g, pPrime;
-		do {
-			p = BigInteger.probablePrime(n - 1, rand);
-			p = TWO.multiply(p).add(ONE);
-			
-			System.out.println("p");
-		} while (!p.isProbablePrime(40) || p.bitLength() != n);
-
-		g = (new BigInteger(p.bitLength() + 100, rand)).mod(p);
-
-		pPrime = p.subtract(ONE).divide(TWO);
-
-		while (!g.modPow(pPrime, p).equals(ONE)) {
-			if (g.modPow(pPrime.multiply(TWO), p).equals(ONE))
-				g = g.modPow(TWO, p);
-			else
-				g = (new BigInteger(p.bitLength() + 100, rand)).mod(p);
-			System.out.println("g");
+		rand=new SecureRandom();
+		BigInteger p = null, d = null, g = null, pPrime;
+		executorService=Executors.newFixedThreadPool(THREADS);
+		List<Callable<BigInteger>> l = new ArrayList<>();
+		for (int i = 0; i < THREADS; i++) {
+			l.add(new PCallable(n,rand));
 		}
-		do {
-			d = (new BigInteger(pPrime.subtract(ONE).bitLength() + 100, rand)).mod(pPrime.subtract(ONE));
-			System.out.println("d");
-		} while (d.equals(ZERO));
+		try {
+			p=executorService.invokeAny(l, 5, MINUTES);
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (ExecutionException e1) {
+			e1.printStackTrace();
+		} catch (TimeoutException e1) {
+			e1.printStackTrace();
+		}
+		pPrime = p.subtract(ONE).divide(TWO);
+		l = new ArrayList<>();
+		for (int i = 0; i < THREADS; i++) {
+			l.add(new GCallable(p,pPrime,rand));
+		}
+		try {
+			g=executorService.invokeAny(l, 5, MINUTES);
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (ExecutionException e1) {
+			e1.printStackTrace();
+		} catch (TimeoutException e1) {
+			e1.printStackTrace();
+		}
+		l = new ArrayList<>();
+		for (int i = 0; i < THREADS; i++) {
+			l.add(new DCallable(pPrime,rand));
+		}
+		try {
+			d=executorService.invokeAny(l, 5, MINUTES);
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (ExecutionException e1) {
+			e1.printStackTrace();
+		} catch (TimeoutException e1) {
+			e1.printStackTrace();
+		}
 		BigInteger e = g.modPow(d, p);
 		privateKey = new PrivateKey(p, g, d);
 		publicKey = new PublicKey(p, g, e);
@@ -62,33 +93,31 @@ public class ElGamalImpl implements ElGamal {
 		int optimalCipherBlockLength = keylength / 8 * 2;
 		SecureRandom rand = new SecureRandom();
 		rand.setSeed(Math.round(Math.random()*1000));
-		BigInteger r, s, c1, pPrime;
+		BigInteger r = null, s, c1, pPrime;
 		pPrime = publicKey.getP().subtract(BigInteger.ONE).divide(TWO);
-		ArrayList<Thread> threads=new ArrayList<>();
-		for (int i = 0; i < 4; i++) {
-			threads.add(new Thread(new Rthread(publicKey.getP(), pPrime, rand)));
-			threads.get(i).start();
+		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
+		for (int i = 0; i < THREADS; i++) {
+			l.add(new RCallable(publicKey.getP(), pPrime,rand));
 		}
-		for (Thread thread : threads) {
-			try {
-				thread.join();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		try {
+			r=executorService.invokeAny(l, 5, MINUTES);
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (ExecutionException e1) {
+			e1.printStackTrace();
+		} catch (TimeoutException e1) {
+			e1.printStackTrace();
 		}
-//		do {
-//			r = (new BigInteger(pPrime.bitLength() + 100, rand)).mod(pPrime);
-//			System.out.println(r);
-//		} while (r.equals(ZERO) || r.gcd(publicKey.getP()) != ONE);
-		r=Rthread.f;
 
 		c1 = publicKey.getG().modPow(r, publicKey.getP());
 		s = publicKey.getE().modPow(r, publicKey.getP());
 
 		ArrayList<Byte> arrayList = new ArrayList<>();
 		byte[] c1Bytes = toByteArray(c1);
-		arrayList.add((byte)(c1Bytes.length/127+1));
-		arrayList.add((byte) c1Bytes.length);
+		byte[] buf=ByteBuffer.allocate(4).putInt(c1Bytes.length).array();
+		for (int i = 0; i < buf.length; i++) {
+			arrayList.add(buf[i]);
+		}
 		for (int i = 0; i < c1Bytes.length; i++) {
 			arrayList.add(c1Bytes[i]);
 		}
@@ -136,20 +165,28 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] decrypt(byte[] data) {
+		if (data.length < 4) {
+			System.err.println("input too short");
+			return data;
+		}
 		int keylength = privateKey.getP().bitLength();
 		int optimalCipherBlockLength = keylength / 8 * 2;
-		byte c1len = data[0];
+		byte[] buf=new byte[4];
+		for (int i = 0; i < buf.length; i++) {
+			buf[i]=data[i];
+		}
+		int c1len = ByteBuffer.wrap(buf).getInt();
+		// only accept full blocks as received from encrypt-method
+		if (data.length - c1len - 1 % optimalCipherBlockLength != 0||data.length-c1len-4<1) {
+			System.err.println("input too short");
+			return data;
+		}
 		byte[] c1arr = new byte[c1len];
-		for (int i = 1; i <= c1len; i++) {
+		for (int i = 4; i <= c1len; i++) {
 			c1arr[i] = data[i];
 		}
 		BigInteger c1 = toBigInt(c1arr);
 		BigInteger s = c1.modPow(privateKey.getD(), privateKey.getP());
-		// only accept full blocks as received from encrypt-method
-		if (data.length - c1len - 1 % optimalCipherBlockLength != 0) {
-			System.err.println("input too short");
-			return data;
-		}
 
 		ArrayList<Byte> al = new ArrayList<>();
 
