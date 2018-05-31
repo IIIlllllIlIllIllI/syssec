@@ -147,6 +147,11 @@ public class ElGamalImpl implements ElGamal {
 			// encrypt the current block
 			// c2
 			m_i = toByteArray((toBigInt(tmp).multiply(s)));
+			int c=0;
+			for (int j = 0; j < optimalCipherBlockLength-m_i.length; j++) {
+				arrayList.add((byte) 0);
+				c++;
+			}
 
 			// copy
 			for (int j = 0; j < m_i.length; j++) {
@@ -177,7 +182,7 @@ public class ElGamalImpl implements ElGamal {
 		}
 		int c1len = ByteBuffer.wrap(buf).getInt();
 		// only accept full blocks as received from encrypt-method
-		if (data.length - c1len - 1 % optimalCipherBlockLength != 0||data.length-c1len-4<1) {
+		if (data.length - c1len - 4 % optimalCipherBlockLength != 0||data.length-c1len-4<1) {
 			System.err.println("input too short");
 			return data;
 		}
