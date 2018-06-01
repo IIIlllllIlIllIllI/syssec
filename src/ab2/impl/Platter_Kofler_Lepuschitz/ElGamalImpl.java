@@ -94,8 +94,6 @@ public class ElGamalImpl implements ElGamal {
 		int keylength = publicKey.getP().bitLength();
 		int blocklength = keylength / 8 - 1;
 		int optimalCipherBlockLength = keylength / 8 * 2;
-		SecureRandom rand = new SecureRandom();
-		rand.setSeed(Math.round(Math.random()*1000));
 		BigInteger r = null, s, c1, pPrime;
 		pPrime = publicKey.getP().subtract(BigInteger.ONE).divide(TWO);
 		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
@@ -134,6 +132,7 @@ public class ElGamalImpl implements ElGamal {
 			if (blocklength < lenLastBlock) {
 				lenLastBlock = blocklength;
 			}
+			m_i[0]=(byte) (blocklength-lenLastBlock+1);
 
 			System.arraycopy(data, i, m_i, m_i.length - lenLastBlock, lenLastBlock);
 			m_i=toByteArray(toBigInt(m_i).multiply(s).mod(publicKey.getP()));
@@ -202,7 +201,6 @@ public class ElGamalImpl implements ElGamal {
 
 			// get padding information
 			int paddingLength = Math.abs(c2_i[0]);
-			paddingLength=0;
 
 			// ignore padded bytes
 			for (int j = paddingLength; j < c2_i.length; j++) {
