@@ -90,10 +90,7 @@ public class ElGamalImpl implements ElGamal {
 	@Override
 	public byte[] encrypt(byte[] data) {
 		System.out.println("DATA: ");
-		for (byte b : data) {
-			System.out.print(b);
-		}
-		System.out.println("");
+		System.out.println(Arrays.toString(data));
 		int keylength = publicKey.getP().bitLength();
 		int blocklength = keylength / 8 - 1;
 		int optimalCipherBlockLength = keylength / 8 * 2;
@@ -139,6 +136,8 @@ public class ElGamalImpl implements ElGamal {
 			}
 
 			System.arraycopy(data, i, m_i, m_i.length - lenLastBlock, lenLastBlock);
+			m_i=toByteArray(toBigInt(m_i).multiply(s).mod(publicKey.getP()));
+			
 
 			// encrypt the current block
 			// c2
@@ -158,10 +157,7 @@ public class ElGamalImpl implements ElGamal {
 			result[i] = arrayList.get(i);
 		}
 		System.out.println("ENCRYPT: "+(result.length-c1Bytes.length-buf.length)%optimalCipherBlockLength);
-		for (byte b : result) {
-			System.out.print(b);
-		}
-		System.out.println("");
+		System.out.println(Arrays.toString(result));
 		return result;
 
 	}
@@ -201,7 +197,7 @@ public class ElGamalImpl implements ElGamal {
 
 			// decrypt the block
 			//m_i
-			c2_i = toByteArray((toBigInt(c2_i).multiply(s.modInverse(privateKey.getP()).mod(privateKey.getP()))));
+			c2_i = toByteArray(toBigInt(c2_i).multiply(s.modInverse(privateKey.getP())).mod(privateKey.getP()));
 
 
 			// get padding information
@@ -220,10 +216,7 @@ public class ElGamalImpl implements ElGamal {
 			result[i] = al.get(i);
 		}
 		System.out.println("DECRYPT");
-		for (byte b : result) {
-			System.out.print(b);
-		}
-		System.out.println("");
+		System.out.println(Arrays.toString(result));
 		return result;
 
 	}
