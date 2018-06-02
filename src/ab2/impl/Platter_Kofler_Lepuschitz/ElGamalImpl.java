@@ -89,42 +89,42 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] encrypt(byte[] data) {
-		System.out.println("DATA: ");
-		System.out.println(Arrays.toString(data));
 		int keylength = publicKey.getP().bitLength();
 		int blocklength = keylength / 8 - 1;
 		int optimalCipherBlockLength = keylength / 8 * 2;
 		BigInteger r = null, s, c1, pPrime;
 		pPrime = publicKey.getP().subtract(BigInteger.ONE).divide(TWO);
-		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
-		for (int i = 0; i < THREADS; i++) {
-			l.add(new RCallable(publicKey.getP(), pPrime,rand));
-		}
-		try {
-			r=executorService.invokeAny(l, 5, MINUTES);
-		} catch (InterruptedException e1) {
-			e1.printStackTrace();
-		} catch (ExecutionException e1) {
-			e1.printStackTrace();
-		} catch (TimeoutException e1) {
-			e1.printStackTrace();
-		}
-
-		c1 = publicKey.getG().modPow(r, publicKey.getP());
-		s = publicKey.getE().modPow(r, publicKey.getP());
+		
 
 		ArrayList<Byte> arrayList = new ArrayList<>();
-		byte[] c1Bytes = toByteArray(c1);
-		byte[] buf=ByteBuffer.allocate(4).putInt(c1Bytes.length).array();
-		for (int i = 0; i < buf.length; i++) {
-			arrayList.add(buf[i]);
-		}
-		for (int i = 0; i < c1Bytes.length; i++) {
-			arrayList.add(c1Bytes[i]);
-		}
+
 
 		// dividing the data into 'blocklength' byte blocks and encrypt them
 		for (int i = 0; i < data.length; i += blocklength) {
+			ArrayList<Callable<BigInteger>> l = new ArrayList<>();
+			for (int j = 0; j < THREADS; j++) {
+				l.add(new RCallable(publicKey.getP(), pPrime,rand));
+			}
+			try {
+				r=executorService.invokeAny(l, 5, MINUTES);
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+			} catch (ExecutionException e1) {
+				e1.printStackTrace();
+			} catch (TimeoutException e1) {
+				e1.printStackTrace();
+			}
+
+			c1 = publicKey.getG().modPow(r, publicKey.getP());
+			s = publicKey.getE().modPow(r, publicKey.getP());
+			
+			byte[] c1Bytes = toByteArray(c1);
+			for (int j = 0; j < optimalCipherBlockLength/2-c1Bytes.length; j++) {
+				arrayList.add((byte) 0);
+			}
+			for (int j = 0; j < c1Bytes.length; j++) {
+				arrayList.add(c1Bytes[j]);
+			}
 			byte[] m_i = new byte[blocklength + 1];
 			int lenLastBlock = data.length - i;
 
@@ -140,7 +140,7 @@ public class ElGamalImpl implements ElGamal {
 
 			// encrypt the current block
 			// c2
-			for (int j = 0; j < optimalCipherBlockLength-m_i.length; j++) {
+			for (int j = 0; j < optimalCipherBlockLength/2-m_i.length; j++) {
 				arrayList.add((byte) 0);
 			}
 
@@ -155,44 +155,33 @@ public class ElGamalImpl implements ElGamal {
 		for (int i = 0; i < arrayList.size(); i++) {
 			result[i] = arrayList.get(i);
 		}
-		System.out.println("ENCRYPT: "+(result.length-c1Bytes.length-buf.length)%optimalCipherBlockLength);
-		System.out.println(Arrays.toString(result));
 		return result;
 
 	}
 
 	@Override
 	public byte[] decrypt(byte[] data) {
-		if (data.length < 4) {
-			System.out.println("input too short");
-			return data;
-		}
 		int keylength = privateKey.getP().bitLength();
 		int optimalCipherBlockLength = keylength / 8 * 2;
-		byte[] buf=new byte[4];
-		for (int i = 0; i < buf.length; i++) {
-			buf[i]=data[i];
-		}
-		int c1len = ByteBuffer.wrap(buf).getInt();
 		// only accept full blocks as received from encrypt-method
-		if ((data.length - c1len - buf.length)% optimalCipherBlockLength != 0||data.length-c1len-buf.length<1) {
-			System.out.println("input has not optimalCipherBlockLength");
+		if (data.length % optimalCipherBlockLength != 0) {
+			System.err.println("input has not optimalCipherBlockLength");
 			return data;
 		}
-		byte[] c1arr = new byte[c1len];
-		for (int i = buf.length; i < c1len+buf.length; i++) {
-			c1arr[i-buf.length] = data[i];
-		}
-		BigInteger c1 = toBigInt(c1arr);
-		BigInteger s = c1.modPow(privateKey.getD(), privateKey.getP());
+
+
 
 		ArrayList<Byte> al = new ArrayList<>();
 
 		// divide the cyphertext into blocks and decrypt them
-		for (int i = buf.length+c1len; i < data.length; i += optimalCipherBlockLength) {
-			byte[] c2_i = new byte[optimalCipherBlockLength];
+		for (int i = 0; i < data.length; i += optimalCipherBlockLength) {
+			byte[] c1_i = new byte[optimalCipherBlockLength/2];
+			System.arraycopy(data, i, c1_i, 0, c1_i.length);
+			BigInteger c1 = toBigInt(c1_i);
+			BigInteger s = c1.modPow(privateKey.getD(), privateKey.getP());
+			byte[] c2_i = new byte[optimalCipherBlockLength/2];
 
-			System.arraycopy(data, i, c2_i, 0, c2_i.length);
+			System.arraycopy(data, i+optimalCipherBlockLength/2, c2_i, 0, c2_i.length);
 
 			// decrypt the block
 			//m_i
@@ -204,7 +193,6 @@ public class ElGamalImpl implements ElGamal {
 
 			// ignore padded bytes
 			for (int j = paddingLength; j < c2_i.length; j++) {
-
 				al.add(c2_i[j]);
 			}
 		}
@@ -213,8 +201,6 @@ public class ElGamalImpl implements ElGamal {
 		for (int i = 0; i < al.size(); i++) {
 			result[i] = al.get(i);
 		}
-		System.out.println("DECRYPT");
-		System.out.println(Arrays.toString(result));
 		return result;
 
 	}
