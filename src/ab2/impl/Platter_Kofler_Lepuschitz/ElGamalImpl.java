@@ -2,6 +2,8 @@ package ab2.impl.Platter_Kofler_Lepuschitz;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +27,8 @@ public class ElGamalImpl implements ElGamal {
 	public static final int THREADS=8;
 	private SecureRandom rand;
 	private ExecutorService executorService;
+	//algorithm used as hash-function
+	private static final String HASH_FUNCTION = "SHA-256";
 	
 	@Override
 	public void init(int n) {
@@ -207,14 +211,52 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] sign(byte[] message) {
-		// TODO Auto-generated method stub
-		return null;
+		BigInteger r = null, pPrime, x;
+		pPrime = privateKey.getP().subtract(BigInteger.ONE).divide(TWO);
+		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
+		for (int i = 0; i < THREADS; i++) {
+			l.add(new RCallable(privateKey.getP(), pPrime,rand));
+		}
+		try {
+			r=executorService.invokeAny(l, 5, MINUTES);
+		} catch (InterruptedException e1) {
+			e1.printStackTrace();
+		} catch (ExecutionException e1) {
+			e1.printStackTrace();
+		} catch (TimeoutException e1) {
+			e1.printStackTrace();
+		}
+		x=privateKey.getG().modPow(r, privateKey.getP());
+		BigInteger s=toBigInt(hash(message)).subtract(privateKey.getD().multiply(x)).divide(r).mod(privateKey.getP().subtract(ONE));
+		if (s.equals(ZERO)){
+			return sign(message);
+		}
+		byte[] p1=toByteArray(x);
+		byte[] p2 = toByteArray(s);
+		byte[] signature=new byte[p1.length+p2.length];
+		for (int i = 0; i < p1.length; i++) {
+			signature[i]=p1[i];
+		}
+		for (int i = 0; i < p2.length; i++) {
+			signature[p1.length+i]=p2[i];
+		}
+		System.out.println(Arrays.toString(signature));
+		return signature;
 	}
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		// TODO Auto-generated method stub
-		return null;
+		byte[] ls = toByteArray(publicKey.getG().modPow(toBigInt(hash(message)),publicKey.getP()));
+		byte[] p1=new byte[signature.length/2];
+		byte[] p2 =new byte[signature.length/2];
+		System.arraycopy(signature, 0, p1, 0, p1.length);
+		System.arraycopy(signature, p1.length, p2, 0, p2.length);
+		
+		byte[] rs = toByteArray(pow(publicKey.getE(),toBigInt(p1)).multiply(pow(toBigInt(p1),toBigInt(p2))).mod(publicKey.getP()));
+
+		System.out.println(Arrays.toString(ls));
+		System.out.println(Arrays.toString( rs));
+		return Arrays.equals(ls, rs);
 	}
 
 	private static BigInteger toBigInt(byte[] arr) {
@@ -240,6 +282,17 @@ public class ElGamalImpl implements ElGamal {
 			exponent = exponent.shiftRight(1);
 		}
 		return result;
+	}
+	
+	private byte[] hash(byte[] data) {
+		try {
+			MessageDigest digest = MessageDigest.getInstance(HASH_FUNCTION);
+			return digest.digest(data);
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		return null;
+
 	}
 
 }
