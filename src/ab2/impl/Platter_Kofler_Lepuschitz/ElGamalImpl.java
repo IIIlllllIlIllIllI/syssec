@@ -211,14 +211,13 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] sign(byte[] message) {
-		BigInteger r = null, pPrime, x;
-		pPrime = privateKey.getP().subtract(BigInteger.ONE).divide(TWO);
+		BigInteger k = null, r;
 		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
 		for (int i = 0; i < THREADS; i++) {
-			l.add(new RCallable(privateKey.getP(), pPrime,rand));
+			l.add(new KCallable(privateKey.getP(),rand));
 		}
 		try {
-			r=executorService.invokeAny(l, 5, MINUTES);
+			k=executorService.invokeAny(l, 5, MINUTES);
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
 		} catch (ExecutionException e1) {
@@ -226,12 +225,12 @@ public class ElGamalImpl implements ElGamal {
 		} catch (TimeoutException e1) {
 			e1.printStackTrace();
 		}
-		x=privateKey.getG().modPow(r, privateKey.getP());
-		BigInteger s=toBigInt(hash(message)).subtract(privateKey.getD().multiply(x)).divide(r).mod(privateKey.getP().subtract(ONE));
+		r=privateKey.getG().modPow(k, privateKey.getP());
+		BigInteger s=toBigInt(hash(message)).subtract(privateKey.getD().multiply(r)).divide(k).mod(privateKey.getP().subtract(ONE));
 		if (s.equals(ZERO)){
 			return sign(message);
 		}
-		byte[] p1=toByteArray(x);
+		byte[] p1=toByteArray(r);
 		byte[] p2 = toByteArray(s);
 		byte[] signature=new byte[p1.length+p2.length];
 		for (int i = 0; i < p1.length; i++) {
@@ -246,17 +245,30 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public Boolean verify(byte[] message, byte[] signature) {
-		byte[] ls = toByteArray(publicKey.getG().modPow(toBigInt(hash(message)),publicKey.getP()));
+		byte[] leftSide = toByteArray(publicKey.getG().modPow(toBigInt(hash(message)),publicKey.getP()));
 		byte[] p1=new byte[signature.length/2];
 		byte[] p2 =new byte[signature.length/2];
 		System.arraycopy(signature, 0, p1, 0, p1.length);
 		System.arraycopy(signature, p1.length, p2, 0, p2.length);
-		
-		byte[] rs = toByteArray(pow(publicKey.getE(),toBigInt(p1)).multiply(pow(toBigInt(p1),toBigInt(p2))).mod(publicKey.getP()));
+		BigInteger r,s;
+		r=toBigInt(p1);
+		s=toBigInt(p2);
+		if(r.compareTo(ZERO)<=0||r.compareTo(publicKey.getP())>=0) {
+			System.out.println("------------");
+			return false;
+		}
+		if(s.compareTo(ZERO)<=0||s.compareTo(publicKey.getP().subtract(ONE))>=0) {
+			System.out.println("+++++++++++++++++++++");
+			return false;
+		}
+		BigInteger yr, rs;
+		yr=publicKey.getE().modPow(r, publicKey.getP());
+		rs=r.modPow(s,publicKey.getP());
+		byte[] rightSide = toByteArray(yr.multiply(rs).mod(publicKey.getP()));
 
-		System.out.println(Arrays.toString(ls));
-		System.out.println(Arrays.toString( rs));
-		return Arrays.equals(ls, rs);
+		System.out.println(Arrays.toString(leftSide));
+		System.out.println(Arrays.toString( rightSide));
+		return Arrays.equals(leftSide, rightSide);
 	}
 
 	private static BigInteger toBigInt(byte[] arr) {
@@ -271,17 +283,6 @@ public class ElGamalImpl implements ElGamal {
 			array = tmp;
 		}
 		return array;
-	}
-
-	BigInteger pow(BigInteger base, BigInteger exponent) {
-		BigInteger result = BigInteger.ONE;
-		while (exponent.signum() > 0) {
-			if (exponent.testBit(0))
-				result = result.multiply(base);
-			base = base.multiply(base);
-			exponent = exponent.shiftRight(1);
-		}
-		return result;
 	}
 	
 	private byte[] hash(byte[] data) {

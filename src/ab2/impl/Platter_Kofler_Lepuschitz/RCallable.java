@@ -5,20 +5,20 @@ import java.security.SecureRandom;
 import java.util.concurrent.Callable;
 
 public class RCallable implements Callable<BigInteger> {
-	private BigInteger a,b;
+	private BigInteger pPrime,p;
 	private SecureRandom s;
 
-	public RCallable(BigInteger b,BigInteger a, SecureRandom s) {
-		this.a=a;
+	public RCallable(BigInteger p,BigInteger pPrime, SecureRandom s) {
+		this.pPrime=pPrime;
 		this.s=s;
-		this.b=b;
+		this.p=p;
 	}
 
 	@Override
 	public BigInteger call() throws Exception {
 		BigInteger r;
 		do {
-			r = (new BigInteger(a.subtract(BigInteger.ONE).bitLength() + 100, s)).mod(a.subtract(BigInteger.ONE));
+			r = (new BigInteger(pPrime.subtract(BigInteger.ONE).bitLength() + 100, s)).mod(pPrime.subtract(BigInteger.ONE));
 		} while (r.equals(BigInteger.ZERO) );
 		return r;
 	}
