@@ -211,6 +211,7 @@ public class ElGamalImpl implements ElGamal {
 
 	@Override
 	public byte[] sign(byte[] message) {
+		int keylength = privateKey.getP().bitLength();
 		BigInteger k = null, r;
 		ArrayList<Callable<BigInteger>> l = new ArrayList<>();
 		for (int i = 0; i < THREADS; i++) {
@@ -226,12 +227,20 @@ public class ElGamalImpl implements ElGamal {
 			e1.printStackTrace();
 		}
 		r=privateKey.getG().modPow(k, privateKey.getP());
-		BigInteger s=toBigInt(hash(message)).subtract(privateKey.getD().multiply(r)).divide(k).mod(privateKey.getP().subtract(ONE));
+		BigInteger hash,xr,hashxr,kinv, hashxrkinv;
+		hash=toBigInt(hash(message));
+		xr=privateKey.getD().multiply(r);
+		hashxr=hash.subtract(xr);
+		kinv=k.modInverse(privateKey.getP().subtract(ONE));
+		hashxrkinv=hashxr.multiply(kinv);
+		BigInteger s=hashxrkinv.mod(privateKey.getP().subtract(ONE));
 		if (s.equals(ZERO)){
 			return sign(message);
 		}
-		byte[] p1=toByteArray(r);
-		byte[] p2 = toByteArray(s);
+		byte[] p1=new byte[keylength/8];
+		System.arraycopy(toByteArray(r), 0, p1, keylength/8-toByteArray(r).length==0?0:1, toByteArray(r).length);
+		byte[] p2 = new byte[keylength/8];
+		System.arraycopy(toByteArray(s), 0, p2, keylength/8-toByteArray(s).length==0?0:1, toByteArray(s).length);
 		byte[] signature=new byte[p1.length+p2.length];
 		for (int i = 0; i < p1.length; i++) {
 			signature[i]=p1[i];
@@ -239,7 +248,6 @@ public class ElGamalImpl implements ElGamal {
 		for (int i = 0; i < p2.length; i++) {
 			signature[p1.length+i]=p2[i];
 		}
-		System.out.println(Arrays.toString(signature));
 		return signature;
 	}
 
@@ -254,20 +262,17 @@ public class ElGamalImpl implements ElGamal {
 		r=toBigInt(p1);
 		s=toBigInt(p2);
 		if(r.compareTo(ZERO)<=0||r.compareTo(publicKey.getP())>=0) {
-			System.out.println("------------");
 			return false;
 		}
 		if(s.compareTo(ZERO)<=0||s.compareTo(publicKey.getP().subtract(ONE))>=0) {
-			System.out.println("+++++++++++++++++++++");
 			return false;
 		}
-		BigInteger yr, rs;
+		BigInteger yr, rs,yrrs;
 		yr=publicKey.getE().modPow(r, publicKey.getP());
 		rs=r.modPow(s,publicKey.getP());
-		byte[] rightSide = toByteArray(yr.multiply(rs).mod(publicKey.getP()));
+		yrrs=yr.multiply(rs);
+		byte[] rightSide = toByteArray(yrrs.mod(publicKey.getP()));
 
-		System.out.println(Arrays.toString(leftSide));
-		System.out.println(Arrays.toString( rightSide));
 		return Arrays.equals(leftSide, rightSide);
 	}
 

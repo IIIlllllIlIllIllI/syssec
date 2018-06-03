@@ -18,7 +18,7 @@ public class KCallable implements Callable<BigInteger> {
 		BigInteger r;
 		do {
 			r = (new BigInteger(p.subtract(BigInteger.ONE).bitLength() + 100, s)).mod(p.subtract(BigInteger.ONE));
-		} while (r.equals(BigInteger.ZERO)||r.equals(ElGamalImpl.ONE)||!r.gcd(p.subtract(BigInteger.ONE)).equals(ElGamalImpl.ONE));
+		} while (r.compareTo(ElGamalImpl.ONE)<=0||r.compareTo(p.subtract(ElGamalImpl.ONE))>=0||!(r.gcd(p.subtract(BigInteger.ONE)).equals(ElGamalImpl.ONE)));
 		return r;
 	}
 
